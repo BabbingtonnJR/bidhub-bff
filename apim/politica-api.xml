@@ -1,0 +1,44 @@
+<!--
+  Política da API "bidhub" no Azure API Management (escopo: API, aba "All operations").
+  - cors: primeiro item do inbound, como pede a documentação do APIM
+  - rate-limit: 100 chamadas por minuto por assinatura (suportado na camada Consumption)
+  - set-backend-service: encaminha para o BFF no Azure Container Apps
+  O sufixo "api" da API faz o papel do rewrite /api -> / (o APIM remove o sufixo antes de chamar o BFF).
+  A chave de assinatura (Ocp-Apim-Subscription-Key) é exigida pela configuração "Subscription required".
+-->
+<policies>
+  <inbound>
+    <cors allow-credentials="false">
+      <allowed-origins>
+        <!-- troque pelo endereço do front no Static Web Apps -->
+        <origin>https://SEU-FRONT.azurestaticapps.net</origin>
+        <origin>http://localhost:5000</origin>
+      </allowed-origins>
+      <allowed-methods preflight-result-max-age="300">
+        <method>GET</method>
+        <method>POST</method>
+        <method>PUT</method>
+        <method>DELETE</method>
+        <method>OPTIONS</method>
+      </allowed-methods>
+      <allowed-headers>
+        <header>content-type</header>
+        <header>accept</header>
+        <header>ocp-apim-subscription-key</header>
+      </allowed-headers>
+    </cors>
+    <base />
+    <rate-limit calls="100" renewal-period="60" />
+    <!-- troque pela URL do BFF no Container Apps -->
+    <set-backend-service base-url="https://SEU-BFF.azurecontainerapps.io" />
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

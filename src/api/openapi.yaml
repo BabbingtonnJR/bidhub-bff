@@ -1,0 +1,278 @@
+openapi: 3.0.3
+info:
+  title: BidHub - BFF
+  version: 1.0.0
+  description: |
+    Backend for Frontend do BidHub. É o único backend que os microfrontends usam (sempre via API Gateway).
+
+    - `GET /aggregated-data` reúne, em uma resposta, o Leilão Service (MongoDB), o Comissão Service (Azure SQL)
+      e a Function Calcular Comissão (comissão projetada dos leilões ao vivo). Se uma fonte falhar,
+      a resposta sai com o que respondeu e o campo `erros` diz qual fonte falhou.
+    - As rotas `/leiloes` e `/comissoes` repassam o CRUD aos microsserviços, com o mesmo status e corpo.
+    - `/simulacoes/comissao` usa a Function para simular a comissão de um valor.
+
+    Pelo API Gateway, todas as rotas ficam sob `/api` (ex.: `/api/aggregated-data`).
+
+    Alunos: André Gustavo, Babbingtonn Luiz, Gabriel Carmo, Marcel Araújo.
+tags:
+  - name: Painel
+  - name: Leilões (proxy)
+  - name: Comissões (proxy)
+  - name: Simulação
+  - name: Operação
+paths:
+  /aggregated-data:
+    get:
+      tags: [Painel]
+      summary: Dados agregados de leilões, comissões e comissão projetada
+      responses:
+        "200":
+          description: Resposta agregada (pode ser parcial; ver `erros`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DadosAgregados" }
+  /leiloes:
+    get:
+      tags: [Leilões (proxy)]
+      summary: Lista leilões (Leilão Service)
+      parameters:
+        - { in: query, name: status, schema: { type: string, enum: [ao-vivo, agendado, encerrado] } }
+      responses:
+        "200": { description: Lista de leilões, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Leilao" } } } } }
+        "502": { $ref: "#/components/responses/Erro502" }
+    post:
+      tags: [Leilões (proxy)]
+      summary: Cadastra leilão (Leilão Service)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lote, titulo, categoria, vendedor, lanceInicial, incrementoMinimo, horario]
+              properties:
+                lote: { type: string, example: "005" }
+                titulo: { type: string, example: "Relógio de bolso suíço, 1910" }
+                categoria: { type: string, example: Antiguidades }
+                vendedor: { type: string, example: Galeria Tempo Antigo }
+                lanceInicial: { type: number, example: 9000 }
+                incrementoMinimo: { type: number, example: 500 }
+                horario: { type: string, example: "Sexta, 18:00" }
+                status: { type: string, enum: [agendado, ao-vivo] }
+                imagem: { type: string, example: "⌚" }
+      responses:
+        "201": { description: Leilão criado, content: { application/json: { schema: { $ref: "#/components/schemas/Leilao" } } } }
+        "400": { $ref: "#/components/responses/Erro" }
+        "422": { $ref: "#/components/responses/Erro" }
+        "502": { $ref: "#/components/responses/Erro502" }
+  /leiloes/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [Leilões (proxy)]
+      summary: Consulta leilão
+      responses:
+        "200": { description: Leilão, content: { application/json: { schema: { $ref: "#/components/schemas/Leilao" } } } }
+        "404": { $ref: "#/components/responses/Erro" }
+    put:
+      tags: [Leilões (proxy)]
+      summary: Altera dados e/ou status (agendado, ao-vivo)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                titulo: { type: string }
+                status: { type: string, enum: [agendado, ao-vivo] }
+      responses:
+        "200": { description: Leilão atualizado }
+        "404": { $ref: "#/components/responses/Erro" }
+        "422": { $ref: "#/components/responses/Erro" }
+    delete:
+      tags: [Leilões (proxy)]
+      summary: Exclui leilão
+      responses:
+        "200": { description: Removido }
+        "404": { $ref: "#/components/responses/Erro" }
+  /leiloes/{id}/lances:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [Leilões (proxy)]
+      summary: Dá um lance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [valor], properties: { valor: { type: number, example: 35500 } } }
+      responses:
+        "200": { description: Lance aceito }
+        "409": { $ref: "#/components/responses/Erro" }
+        "422": { $ref: "#/components/responses/Erro" }
+  /leiloes/{id}/encerramento:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [Leilões (proxy)]
+      summary: Encerra o leilão (publica LeilaoEncerrado; a comissão é gerada pelo Comissão Service)
+      responses:
+        "200": { description: Leilão encerrado }
+        "422": { $ref: "#/components/responses/Erro" }
+  /comissoes:
+    get:
+      tags: [Comissões (proxy)]
+      summary: Lista comissões (Comissão Service)
+      parameters:
+        - { in: query, name: status, schema: { type: string, enum: [PENDENTE, COBRADA, CONCILIADA] } }
+      responses:
+        "200": { description: Lista de comissões, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Comissao" } } } } }
+        "502": { $ref: "#/components/responses/Erro502" }
+    post:
+      tags: [Comissões (proxy)]
+      summary: Cadastra comissão manualmente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [leilaoId, categoria, vendedor, valorBase]
+              properties:
+                leilaoId: { type: integer, example: 4 }
+                categoria: { type: string, example: Joias }
+                vendedor: { type: string, example: Joalheria Lumière }
+                valorBase: { type: number, example: 128000 }
+      responses:
+        "201": { description: Comissão criada }
+        "409": { $ref: "#/components/responses/Erro" }
+  /comissoes/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [Comissões (proxy)]
+      summary: Consulta comissão
+      responses:
+        "200": { description: Comissão, content: { application/json: { schema: { $ref: "#/components/schemas/Comissao" } } } }
+        "404": { $ref: "#/components/responses/Erro" }
+    put:
+      tags: [Comissões (proxy)]
+      summary: Avança o status (PENDENTE -> COBRADA -> CONCILIADA)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [status], properties: { status: { type: string, enum: [COBRADA, CONCILIADA] } } }
+      responses:
+        "200": { description: Comissão atualizada }
+        "422": { $ref: "#/components/responses/Erro" }
+    delete:
+      tags: [Comissões (proxy)]
+      summary: Exclui comissão PENDENTE
+      responses:
+        "200": { description: Removida }
+        "422": { $ref: "#/components/responses/Erro" }
+  /simulacoes/comissao:
+    post:
+      tags: [Simulação]
+      summary: Simula a comissão de um valor (Function Calcular Comissão)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [valorBase]
+              properties:
+                valorBase: { type: number, example: 220000 }
+                categoria: { type: string, example: Veículos }
+      responses:
+        "200":
+          description: Cálculo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valorBase: { type: number, example: 220000 }
+                  percentual: { type: number, example: 3.91 }
+                  valorCobrado: { type: number, example: 8600 }
+                  faixas: { type: array, items: { type: object } }
+        "400": { $ref: "#/components/responses/Erro" }
+        "502": { $ref: "#/components/responses/Erro502" }
+  /health:
+    get:
+      tags: [Operação]
+      summary: Verifica se o BFF está no ar
+      responses:
+        "200": { description: OK }
+components:
+  parameters:
+    Id:
+      in: path
+      name: id
+      required: true
+      schema: { type: integer, minimum: 1, example: 1 }
+  schemas:
+    Leilao:
+      type: object
+      properties:
+        id: { type: integer }
+        titulo: { type: string }
+        categoria: { type: string }
+        vendedor: { type: string }
+        lanceAtual: { type: number }
+        lanceMinimo: { type: number }
+        incrementoMinimo: { type: number }
+        status: { type: string, enum: [ao-vivo, agendado, encerrado] }
+    Comissao:
+      type: object
+      properties:
+        id: { type: integer }
+        leilaoId: { type: integer }
+        valorBase: { type: number }
+        percentual: { type: number }
+        valorCobrado: { type: number }
+        status: { type: string, enum: [PENDENTE, COBRADA, CONCILIADA] }
+    DadosAgregados:
+      type: object
+      properties:
+        leiloes: { type: array, items: { $ref: "#/components/schemas/Leilao" } }
+        comissoes: { type: array, items: { $ref: "#/components/schemas/Comissao" } }
+        projecao:
+          type: array
+          description: Comissão projetada de cada leilão ao vivo, calculada pela Function sobre o lance atual
+          items:
+            type: object
+            properties:
+              leilaoId: { type: integer }
+              valorBase: { type: number }
+              percentual: { type: number }
+              valorCobrado: { type: number }
+        resumo:
+          type: object
+          properties:
+            totalLeiloes: { type: integer }
+            leiloesPorStatus: { type: object, additionalProperties: { type: integer } }
+            valorEmDisputa: { type: number }
+            totalComissoes: { type: integer }
+            comissoesPorStatus: { type: object, additionalProperties: { type: integer } }
+            valorTotalComissoes: { type: number }
+            valorComissoesPendentes: { type: number }
+            comissaoProjetadaTotal: { type: number }
+            encerradosAguardandoComissao: { type: integer }
+        erros:
+          type: array
+          items:
+            type: object
+            properties:
+              fonte: { type: string, enum: [leilao-service, comissao-service, function-calcular-comissao] }
+              mensagem: { type: string }
+        geradoEm: { type: string, format: date-time }
+    Erro:
+      type: object
+      properties:
+        erro: { type: string }
+  responses:
+    Erro:
+      description: Erro repassado do microsserviço (mesmo status e mensagem)
+      content: { application/json: { schema: { $ref: "#/components/schemas/Erro" } } }
+    Erro502:
+      description: Microsserviço ou Function indisponível
+      content: { application/json: { schema: { $ref: "#/components/schemas/Erro" } } }
