@@ -98,9 +98,9 @@ npm start                 # http://localhost:3000  ·  Swagger em http://localho
 
 ## API Gateway
 
-A API é importada no APIM a partir de `https://<bff>/docs/openapi.json`, com sufixo `api` e assinatura obrigatória.
+A API é importada no APIM a partir de `https://bidhub-bff.happydesert-9360b05e.westus2.azurecontainerapps.io/docs/openapi.json`, com sufixo `api` e assinatura obrigatória.
 A política está em `apim/politica-api.xml` (CORS primeiro no inbound, `rate-limit` de 100 chamadas/min e
-`set-backend-service` para o BFF). Pelo Gateway: `https://<apim>.azure-api.net/api/aggregated-data` com o cabeçalho
+`set-backend-service` para o BFF). Pelo Gateway: `https://bidhub-apim-bjr.azure-api.net/api/aggregated-data` com o cabeçalho
 `Ocp-Apim-Subscription-Key`.
 
 ## Testes
@@ -125,12 +125,12 @@ Ele também confere que cada feature tem um único `*UseCase.js` e está ligada 
 ## Docker
 
 ```bash
-docker build -t <usuario-dockerhub>/bidhub-bff:v1 .
+docker build -t babbingtonnjr/bidhub-bff:v1 .
 docker login
-docker push <usuario-dockerhub>/bidhub-bff:v1
+docker push babbingtonnjr/bidhub-bff:v1
 
 # rodar a imagem localmente
-docker run --rm -p 3000:3000 --env-file .env <usuario-dockerhub>/bidhub-bff:v1
+docker run --rm -p 3000:3000 --env-file .env babbingtonnjr/bidhub-bff:v1
 ```
 
 O workflow `.github/workflows/ci.yml` roda `npm test` em cada push e, na `main`, publica `latest` e `sha-<commit>` no Docker Hub
@@ -138,14 +138,21 @@ O workflow `.github/workflows/ci.yml` roda `npm test` em cada push e, na `main`,
 
 ## Endereços publicados
 
-Preencher depois da implantação (os mesmos endereços vão na Seção 7.3 do arc42).
+Tudo na Azure (West US 2) e no MongoDB Atlas (São Paulo). Os mesmos endereços estão na Seção 7.3 do arc42.
 
 | Item | URL |
 |---|---|
-| BFF | https://<bff>.<regiao>.azurecontainerapps.io |
-| Swagger do BFF | https://<bff>.<regiao>.azurecontainerapps.io/docs |
-| API Gateway | https://<apim>.azure-api.net/api |
-| Imagem Docker | https://hub.docker.com/r/<usuario-dockerhub>/bidhub-bff |
+| Front-end | https://ashy-sea-09b9cfb1e.3.azurestaticapps.net |
+| API Gateway (APIM) | https://bidhub-apim-bjr.azure-api.net/api (cabeçalho `Ocp-Apim-Subscription-Key`) |
+| BFF | https://bidhub-bff.happydesert-9360b05e.westus2.azurecontainerapps.io |
+| Swagger do BFF | https://bidhub-bff.happydesert-9360b05e.westus2.azurecontainerapps.io/docs |
+| Leilão Service | https://bidhub-leilao-service.happydesert-9360b05e.westus2.azurecontainerapps.io |
+| Swagger do Leilão Service | https://bidhub-leilao-service.happydesert-9360b05e.westus2.azurecontainerapps.io/docs |
+| Eventos (AsyncAPI) | https://bidhub-leilao-service.happydesert-9360b05e.westus2.azurecontainerapps.io/docs/eventos |
+| Comissão Service | https://bidhub-comissao-service.happydesert-9360b05e.westus2.azurecontainerapps.io |
+| Swagger do Comissão Service | https://bidhub-comissao-service.happydesert-9360b05e.westus2.azurecontainerapps.io/docs |
+| Function Calcular Comissão | https://bidhub-fn-bjr.azurewebsites.net/api/calcular-comissao (exige `?code=<chave>`) |
+| Imagens Docker | https://hub.docker.com/u/babbingtonnjr |
 
 ## Repositórios do projeto
 
